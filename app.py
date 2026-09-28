@@ -1,14 +1,11 @@
 import streamlit as st
 import pandas as pd
-import joblib
 
-
-# =========================================================
-# LOAD TRAINED MODELS
-# =========================================================
-
-crop_model = joblib.load("models/crop_model.pkl")
-price_model = joblib.load("models/price_model.pkl")
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
 
 
 # =========================================================
@@ -20,6 +17,98 @@ st.set_page_config(
     page_icon="🌾",
     layout="wide"
 )
+
+
+# =========================================================
+# TRAIN CROP MODEL
+# =========================================================
+
+@st.cache_resource
+def train_crop_model():
+
+    data = pd.read_csv("datasets/Crop_recommendation.csv")
+
+    X = data.drop("label", axis=1)
+    y = data["label"]
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X,
+        y,
+        test_size=0.2,
+        random_state=42
+    )
+
+    model = RandomForestClassifier(
+        n_estimators=100,
+        random_state=42
+    )
+
+    model.fit(X_train, y_train)
+
+    return model
+
+
+# =========================================================
+# TRAIN PRICE MODEL
+# =========================================================
+
+@st.cache_resource
+def train_price_model():
+
+    data = pd.read_csv("datasets/daily_price.csv")
+
+    X = data.drop("Modal Price", axis=1)
+    y = data["Modal Price"]
+
+    categorical_columns = [
+        "State",
+        "District",
+        "Market",
+        "Commodity",
+        "Variety",
+        "Grade"
+    ]
+
+    preprocessor = ColumnTransformer(
+        transformers=[
+            (
+                "cat",
+                OneHotEncoder(handle_unknown="ignore"),
+                categorical_columns
+            )
+        ],
+        remainder="passthrough"
+    )
+
+    model = RandomForestRegressor(
+        n_estimators=100,
+        random_state=42
+    )
+
+    pipeline = Pipeline([
+        ("preprocessor", preprocessor),
+        ("model", model)
+    ])
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X,
+        y,
+        test_size=0.2,
+        random_state=42
+    )
+
+    pipeline.fit(X_train, y_train)
+
+    return pipeline
+
+
+# =========================================================
+# LOAD / TRAIN MODELS
+# =========================================================
+
+with st.spinner("Loading Machine Learning models..."):
+    crop_model = train_crop_model()
+    price_model = train_price_model()
 
 
 # =========================================================
@@ -54,7 +143,6 @@ st.sidebar.write("""
 - Pandas
 - Scikit-learn
 - Random Forest
-- Joblib
 - Streamlit
 """)
 
@@ -134,9 +222,10 @@ with tab1:
             value=203.0
         )
 
-    st.write("")
-
-    if st.button("🌱 Recommend Crop", use_container_width=True):
+    if st.button(
+        "🌱 Recommend Crop",
+        use_container_width=True
+    ):
 
         input_data = pd.DataFrame([{
             "N": N,
@@ -216,9 +305,10 @@ with tab2:
             value=3400.0
         )
 
-    st.write("")
-
-    if st.button("💰 Predict Price", use_container_width=True):
+    if st.button(
+        "💰 Predict Price",
+        use_container_width=True
+    ):
 
         price_input = pd.DataFrame([{
             "State": state,
